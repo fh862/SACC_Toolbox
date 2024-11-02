@@ -117,6 +117,9 @@ modulatingPrimary = fmincon(@(x) IsolateFunction(x,B_primary,backgroundPrimary,a
     T_receptors,desiredContrasts,targetBasis,projectIndices,targetLambda,p.Results.EXCITATIONS), ...
     x,C,q,[],[],[],[],[],options);
 
+% finalError = IsolateFunction(modulatingPrimary,B_primary,backgroundPrimary,ambientSpd, ...
+%     T_receptors,desiredContrasts,targetBasis,projectIndices,targetLambda,p.Results.EXCITATIONS)
+
 %% Check gamut
 upperPrimary = backgroundPrimary + modulatingPrimary;
 lowerPrimary = backgroundPrimary - modulatingPrimary;
@@ -155,18 +158,8 @@ else
     isolateContrast = ExcitationsToContrast(T_receptors*modulationSpd,T_receptors*backgroundSpd);
 end
 
-% Get contrast term
-if isempty(desiredContrasts)
-    % Want the sum of the isolated receptor contrasts to be big. fmincon
-    % minimizes, hence the negative sign.  Acheive this by minimizing
-    % the difference between the isolatedContrasts and unity.  For
-    % reasons not fully understood, this works better numerically than
-    % simply minimizing the negative sum of squared contrasts.
-    f1 = sqrt( sum((isolateContrast-1).^2) ) / norm(desiredContrasts);
-else
-    % Minimize difference between desired and what we get
-    f1 = sqrt( sum((isolateContrast-desiredContrasts).^2) ) / norm(desiredContrasts);
-end
+% Get contrast term - minimize difference between desired and what we get
+f1 = sqrt( sum((isolateContrast-desiredContrasts).^2) ) / norm(desiredContrasts);
 
 % Get basis term
 if (targetLambda > 0)
