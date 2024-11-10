@@ -88,6 +88,7 @@ arguments
     options.noISETBio (1,1) = true
     options.lightVer (1,1) = true
     options.printGaborSpds (1,1) = false
+    options.MTF_SACCSFA (:,:) = []
 end
 
 %% Say hello.
@@ -106,7 +107,8 @@ spatialTemporalParamsCheck = {'sineFreqCyclesPerDeg','gaborSdDeg','stimulusSizeD
 nspatialTemporalParamsCheck = size(spatialTemporalParamsCheck,2);
 for cc = 1:nspatialTemporalParamsCheck
     if(any(~isfield(spatialTemporalParams,spatialTemporalParamsCheck{cc})))
-        error(append('Not enough spatial temporal parameters, missing parameter: ',spatialTemporalParamsCheck{cc}));
+        error(append('Not enough spatial temporal parameters, missing parameter: ',...
+            spatialTemporalParamsCheck{cc}));
     end
 end
 
@@ -117,7 +119,8 @@ stimulusSizeDeg = spatialTemporalParams.stimulusSizeDeg;
 
 %% Do all calibraiton loading.
 screenGammaMethod = 2;
-[screenCalObj,channelCalObjs] = LoadAndSetExperimentCalFiles(colorDirectionParams,'screenGammaMethod',screenGammaMethod,'verbose',options.verboseDetail);
+[screenCalObj,channelCalObjs] = LoadAndSetExperimentCalFiles(colorDirectionParams,...
+    'screenGammaMethod',screenGammaMethod,'verbose',options.verboseDetail);
 
 %% Use extant machinery to get primaries from spectrum.
 %
@@ -130,21 +133,26 @@ highProjectWl = 700;
 projectIndices = find(colorDirectionParams.wls > lowProjectWl & colorDirectionParams.wls < highProjectWl);
 
 %% Find primaries with desired LMS contrast.
-[screenPrimaryChannelObject,backgroundChannelObject] = SetupChannelPrimaries(colorDirectionParams,channelCalObjs,projectIndices,'verbose',options.verboseDetail);
+[screenPrimaryChannelObject,backgroundChannelObject] = ...
+    SetupChannelPrimaries(colorDirectionParams,channelCalObjs,projectIndices,...
+    'verbose',options.verboseDetail);
 
 %% Set the screen primaries.
 %
 % We want these to match those we set up with the channel calculations
 % above.  Need to reset sensor color space after we do this, so that the
 % conversion matrix is properly recomputed.
-screenCalObj.set('P_device', screenPrimaryChannelObject.screenPrimarySpd);
+load('targetScreenSpdMeasured.mat', 'targetScreenSpdMeasured');
+screenCalObj.set('P_device', targetScreenSpdMeasured); %Semin's old code: screenPrimaryChannelObject.screenPrimarySpd);
 SetSensorColorSpace(screenCalObj, colorDirectionParams.T_cones, colorDirectionParams.S);
 
 %% Create ISETBio display from the calibration file.
-[ISETBioDisplayObject,screenSizeObject,screenCalObjFromISETBio] = SetupISETBioDisplayObject(colorDirectionParams,screenCalObj,'verbose',options.verboseDetail);
+[ISETBioDisplayObject,screenSizeObject, ~] = SetupISETBioDisplayObject(...
+    colorDirectionParams,screenCalObj,'verbose',options.verboseDetail);
 
 %% Set up the background screen primaries.
-backgroundScreenPrimaryObject = SetupBackground(colorDirectionParams,screenCalObj,backgroundChannelObject,'verbose',options.verboseDetail);
+backgroundScreenPrimaryObject = SetupBackground(colorDirectionParams,...
+    screenCalObj,backgroundChannelObject,'verbose',options.verboseDetail);
 
 %% Make a monochrome Gabor patch in rangMakeISETBioSceneFromImagee -1 to 1.
 %
@@ -152,16 +160,17 @@ backgroundScreenPrimaryObject = SetupBackground(colorDirectionParams,screenCalOb
 % contrast vector to get the LMS contrast image. The function includes the
 % quantization of the gabor image.
 nQuantizeBits = 14;
-[rawMonochromeUnquantizedContrastGaborImage, rawMonochromeUnquantizedContrastGaborCal, rawMonochromeContrastGaborCal, ...
-    stimulusN, centerN, stimulusHorizSizeDeg, stimulusHorizSizeMeters] = ...
-    MakeMonochromeContrastGabor(stimulusSizeDeg,sineFreqCyclesPerDeg,gaborSdDeg,screenSizeObject,...
-    'sineImagePhaseShiftDeg', spatialTemporalParams.sineImagePhaseShiftDeg, 'verbose',options.verboseDetail,'nQuantizeBits',nQuantizeBits);
+[~, ~, rawMonochromeContrastGaborCal, stimulusN, ~, stimulusHorizSizeDeg,...
+    stimulusHorizSizeMeters] = MakeMonochromeContrastGabor(stimulusSizeDeg,...
+    sineFreqCyclesPerDeg,gaborSdDeg,screenSizeObject, 'sineImagePhaseShiftDeg',...
+    spatialTemporalParams.sineImagePhaseShiftDeg, 'verbose',options.verboseDetail,...
+    'nQuantizeBits',nQuantizeBits);
 
 %% Get cone contrast/excitation gabor image.
 [ptCldObject,standardGaborCalObject,screenCalObj,backgroundScreenPrimaryObject] = ...
     SetupPointCloudFromGabor(colorDirectionParams,rawMonochromeContrastGaborCal,...
     screenCalObj,backgroundScreenPrimaryObject,screenPrimaryChannelObject,...
-    'measure',options.measure,'warmupTimeMinutes',0,...
+    'measure',options.measure,'warmupTimeMinutes',0,'lightVer', options.lightVer,...
     'printGaborSpds', options.printGaborSpds,'verbose',options.verboseDetail);
 
 %% Make image from point cloud.
@@ -175,13 +184,16 @@ nQuantizeBits = 14;
 % settings field.  But, that's what happened, so the standard settings
 % rather than the point cloud settings got used.  The MakeSettingsFromPtCld
 % routine does not actually return the point cloud settings.
-gaborImageObject = MakeImageSettingsFromPtCld(ptCldObject,screenCalObj,standardGaborCalObject,...
-    backgroundScreenPrimaryObject.screenBgExcitations,stimulusN,'verbose',options.verboseDetail,'lightVer',options.lightVer);
+gaborImageObject = MakeImageSettingsFromPtCld(ptCldObject,screenCalObj,...
+    standardGaborCalObject, backgroundScreenPrimaryObject.screenBgExcitations,...
+    stimulusN,'verbose',options.verboseDetail,'lightVer',options.lightVer);
 
 %% Put the image into an ISETBio scene.
 if (~options.noISETBio)
-    ISETBioGaborObject = MakeISETBioSceneFromImage(colorDirectionParams,gaborImageObject,standardGaborCalObject,...
-        ISETBioDisplayObject,stimulusHorizSizeMeters,stimulusHorizSizeDeg,'verbose',options.verboseDetail);
+    ISETBioGaborObject = MakeISETBioSceneFromImage(colorDirectionParams,...
+        gaborImageObject,standardGaborCalObject, ISETBioDisplayObject,...
+        stimulusHorizSizeMeters,stimulusHorizSizeDeg,'verbose',options.verboseDetail,...
+        'MTF_SACCSFA', options.MTF_SACCSFA);
     
     gaborISETBioScene = ISETBioGaborObject.ISETBioGaborScene;
 else

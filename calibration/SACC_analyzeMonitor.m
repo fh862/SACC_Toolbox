@@ -14,7 +14,7 @@ clear; close all;
 dir = cd;
 
 % Get the dir that stors the measurement files.
-fileDir = '/Users/seminoh/Aguirre-Brainard Lab Dropbox/Semin Oh/SACC_materials/Calibration';
+fileDir = '/Users/seminoh/Aguirre-Brainard Lab Dropbox/Fangfang Hong/SCMD_materials/Calibration';
 cd(fileDir);
 
 %% Load calibration data.

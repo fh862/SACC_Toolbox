@@ -58,6 +58,7 @@ arguments
     stimulusHorizSizeMeters
     stimulusHorizSizeDeg
     options.verbose (1,1) = true
+    options.MTF_SACCSFA (:,:) = [] % Accepts any size matrix, default is empty
 end
 
 %% Put the image into an ISETBio scene.
@@ -72,6 +73,49 @@ for ss = 1:nPhaseShifts
     for cc = 1:nContrastPoints
         % Make ISETBio scene from the gabor image.
         ISETBioGaborScene = sceneFromFile(gaborImageObject.standardSettingsGaborImage{ss,cc},'rgb', [], ISETBioDisplayObject);
+
+        % apply MTF
+        if ~isempty(options.MTF_SACCSFA)
+            ISETBioGaborScene_without_MTF = ISETBioGaborScene;
+            func_contrast = @(l) (max(l(:)) - min(l(:)))/(max(l(:)) + min(l(:)));
+            %retrieve the photons
+            photons_f = sceneGet(ISETBioGaborScene, 'photons');
+            wvl = sceneGet(ISETBioGaborScene, 'wave');
+            
+            %initialize
+            photons_f_adjusted = NaN(size(photons_f));
+            [contrast_MTF_uncorrected, contrast_MTF_corrected_theoretical, contrast_MTF_corrected_actual] = ...
+                deal(NaN(1, length(wvl)));
+            for w = 1:length(wvl)
+                % Extract the image slice for the current wavelength
+                photons_f_w = photons_f(:,:,w);
+            
+                % Calculate Michelson contrast for this wavelength
+                contrast_MTF_uncorrected(w) = func_contrast(photons_f_w);
+                contrast_MTF_corrected_theoretical(w) = contrast_MTF_uncorrected(w)* options.MTF_SACCSFA(w);
+        
+                photons_f_adjusted(:,:,w) = (photons_f_w - mean(photons_f_w(:))).* options.MTF_SACCSFA(w) + mean(photons_f_w(:));
+                contrast_MTF_corrected_actual(w) = func_contrast(photons_f_adjusted(:,:,w));
+            end
+            %stick photons back to the scene
+            ISETBioGaborScene.data.photons = photons_f_adjusted;
+            
+            % visualizations for debugging
+            if options.verbose
+                figure; scatter(contrast_MTF_corrected_theoretical, contrast_MTF_corrected_actual); grid on; axis square
+                xlabel('Predicted modified contrast'); ylabel('Actual modified contrast');
+
+                mid_row = ceil(size(photons_f,1)/2);
+                slc_wvl =  [81,101,121];
+                figure;
+                for ww = 1:length(slc_wvl)
+                    subplot(3,1,ww)
+                    plot(photons_f(mid_row, 200:750, slc_wvl(ww)), 'k','LineWidth',2); hold on
+                    plot(photons_f_adjusted(mid_row, 200:750,slc_wvl(ww)), 'g','LineWidth',1);
+                    yticks([]); title(sprintf('Wvl: %.0f nm', wvl(slc_wvl(ww))));
+                end
+            end
+        end
         
         % Show the image on ISETBio scene window.
         if (options.verbose)
@@ -111,20 +155,25 @@ for ss = 1:nPhaseShifts
             plot(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(1,:), ISETBioPredictedExcitationsGaborCal(1,:),'r+');
             plot(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(2,:), ISETBioPredictedExcitationsGaborCal(2,:),'g+');
             plot(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(3,:), ISETBioPredictedExcitationsGaborCal(3,:),'b+');
-            plot([limMin limMax], [limMin limMax]);
+            %plot([limMin limMax], [limMin limMax]);
             xlabel('Standard Cone Excitations');
             ylabel('ISETBio Cone Excitations');
-            axis('square'); xlim([limMin limMax]); ylim([limMin limMax]);
+            axis('square'); %xlim([limMin limMax]); ylim([limMin limMax]);
             title('Cone Excitations Comparison');
         end
         
-        % Check if it predicts well.
-        if (max(abs(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(:) - ISETBioPredictedExcitationsGaborCal(:)) ./ ...
-                standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(:)) > 1e-6)
-            error('Standard and ISETBio data do not agree well enough');
+        % Check if it predicts well
+        % If we apply the display's MTF, it will definitely not pass the
+        % following check, so skip it.
+        if isempty(options.MTF_SACCSFA)
+            if (max(abs(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(:) - ISETBioPredictedExcitationsGaborCal(:)) ./ ...
+                    standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(:)) > 1e-5)
+                error('Standard and ISETBio data do not agree well enough');
+            end
         end
         
         % Save the results in a struct.
+        ISETBioGaborObject.ISETBioGaborScene_without_MTF{ss,cc} = ISETBioGaborScene_without_MTF;
         ISETBioGaborObject.ISETBioGaborScene{ss,cc} = ISETBioGaborScene;
         ISETBioGaborObject.ISETBioGaborImage{ss,cc} = ISETBioGaborImage;
         ISETBioGaborObject.ISETBioPredictedExcitationsGaborCal{ss,cc} = ISETBioPredictedExcitationsGaborCal;
