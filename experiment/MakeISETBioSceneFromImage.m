@@ -73,10 +73,11 @@ for ss = 1:nPhaseShifts
     for cc = 1:nContrastPoints
         % Make ISETBio scene from the gabor image.
         ISETBioGaborScene = sceneFromFile(gaborImageObject.standardSettingsGaborImage{ss,cc},'rgb', [], ISETBioDisplayObject);
-
+        %clear this huge variable to save some memory
+        clear gaborImageObject
         % apply MTF
         if ~isempty(options.MTF_SACCSFA)
-            ISETBioGaborScene_without_MTF = ISETBioGaborScene;
+            % ISETBioGaborScene_without_MTF = ISETBioGaborScene;
             func_contrast = @(l) (max(l(:)) - min(l(:)))/(max(l(:)) + min(l(:)));
             %retrieve the photons
             photons_f = sceneGet(ISETBioGaborScene, 'photons');
@@ -110,9 +111,9 @@ for ss = 1:nPhaseShifts
                 figure;
                 for ww = 1:length(slc_wvl)
                     subplot(3,1,ww)
-                    plot(photons_f(mid_row, 200:750, slc_wvl(ww)), 'k','LineWidth',2); hold on
-                    plot(photons_f_adjusted(mid_row, 200:750,slc_wvl(ww)), 'g','LineWidth',1);
-                    yticks([]); title(sprintf('Wvl: %.0f nm', wvl(slc_wvl(ww))));
+                    plot(200:750, photons_f(mid_row, 200:750, slc_wvl(ww)), 'k','LineWidth',2); hold on
+                    plot(200:750,photons_f_adjusted(mid_row, 200:750,slc_wvl(ww)), 'g','LineWidth',1);
+                    title(sprintf('Wvl: %.0f nm', wvl(slc_wvl(ww)))); xlim([200,750]);
                 end
             end
         end
@@ -140,13 +141,12 @@ for ss = 1:nPhaseShifts
         % ISETBio energy comes back as power per nm, we need to convert to power
         % per wlband to work with PTB, by multiplying by S(2).
         ISETBioGaborImage = sceneGet(ISETBioGaborScene,'energy') * colorDirectionParams.S(2);
-        [ISETBioGaborCal,ISETBioM,ISETBioN] = ImageToCalFormat(ISETBioGaborImage);
+        [ISETBioGaborCal,~,~] = ImageToCalFormat(ISETBioGaborImage);
         if (isfield(colorDirectionParams,'T_receptors'))
             ISETBioPredictedExcitationsGaborCal = colorDirectionParams.T_receptors * ISETBioGaborCal;
         else
             ISETBioPredictedExcitationsGaborCal = colorDirectionParams.T_cones * ISETBioGaborCal;
         end
-        limMin = 0.01; limMax = 0.02;
         
         % Plot it to comapare the cone excitations between before and after passing
         % the ISETBio scene.
@@ -155,6 +155,7 @@ for ss = 1:nPhaseShifts
             plot(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(1,:), ISETBioPredictedExcitationsGaborCal(1,:),'r+');
             plot(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(2,:), ISETBioPredictedExcitationsGaborCal(2,:),'g+');
             plot(standardGaborCalObject.standardPredictedExcitationsGaborCal{ss,cc}(3,:), ISETBioPredictedExcitationsGaborCal(3,:),'b+');
+            %limMin = 0.01; limMax = 0.02;
             %plot([limMin limMax], [limMin limMax]);
             xlabel('Standard Cone Excitations');
             ylabel('ISETBio Cone Excitations');
@@ -173,7 +174,7 @@ for ss = 1:nPhaseShifts
         end
         
         % Save the results in a struct.
-        ISETBioGaborObject.ISETBioGaborScene_without_MTF{ss,cc} = ISETBioGaborScene_without_MTF;
+        % ISETBioGaborObject.ISETBioGaborScene_without_MTF{ss,cc} = ISETBioGaborScene_without_MTF;
         ISETBioGaborObject.ISETBioGaborScene{ss,cc} = ISETBioGaborScene;
         ISETBioGaborObject.ISETBioGaborImage{ss,cc} = ISETBioGaborImage;
         ISETBioGaborObject.ISETBioPredictedExcitationsGaborCal{ss,cc} = ISETBioPredictedExcitationsGaborCal;
