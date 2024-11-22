@@ -61,6 +61,11 @@ arguments
     options.MTF_SACCSFA (:,:) = [] % Accepts any size matrix, default is empty
 end
 
+if ~isempty(options.MTF_SACCSFA)
+    %no need to keep this variable (delete it to save some space)
+    clear standardGaborCalObject
+end
+
 %% Put the image into an ISETBio scene.
 %
 % These calls are a bit slow for large images and the fine wavelength
@@ -73,8 +78,6 @@ for ss = 1:nPhaseShifts
     for cc = 1:nContrastPoints
         % Make ISETBio scene from the gabor image.
         ISETBioGaborScene = sceneFromFile(gaborImageObject.standardSettingsGaborImage{ss,cc},'rgb', [], ISETBioDisplayObject);
-        %clear this huge variable to save some memory
-        clear gaborImageObject
         % apply MTF
         if ~isempty(options.MTF_SACCSFA)
             % ISETBioGaborScene_without_MTF = ISETBioGaborScene;
@@ -95,7 +98,8 @@ for ss = 1:nPhaseShifts
                 contrast_MTF_uncorrected(w) = func_contrast(photons_f_w);
                 contrast_MTF_corrected_theoretical(w) = contrast_MTF_uncorrected(w)* options.MTF_SACCSFA(w);
         
-                photons_f_adjusted(:,:,w) = (photons_f_w - mean(photons_f_w(:))).* options.MTF_SACCSFA(w) + mean(photons_f_w(:));
+                photons_f_adjusted(:,:,w) = (photons_f_w - mean(photons_f_w(:))).* options.MTF_SACCSFA(w) +...
+                    mean(photons_f_w(:));
                 contrast_MTF_corrected_actual(w) = func_contrast(photons_f_adjusted(:,:,w));
             end
             %stick photons back to the scene
@@ -116,6 +120,8 @@ for ss = 1:nPhaseShifts
                     title(sprintf('Wvl: %.0f nm', wvl(slc_wvl(ww)))); xlim([200,750]);
                 end
             end
+            %clear these variables to save some memory
+            clear photons_f photons_f_adjusted contrast_MTF_uncorrected contrast_MTF_corrected_theoretical contrast_MTF_corrected_actual
         end
         
         % Show the image on ISETBio scene window.
@@ -186,4 +192,6 @@ for ss = 1:nPhaseShifts
         end
     end
 end
+%clear this huge variable to save some memory
+clear gaborImageObject
 end
